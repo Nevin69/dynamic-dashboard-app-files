@@ -1,15 +1,15 @@
 import pandas as pd
 import json
-import sys
 
 def process_file(file_path):
     try:
         # Read the Excel file
-        df = pd.read_excel(file_path)
-
+        df = pd.read_excel(file_path, engine="openpyxl")
+        
         # Validate required columns
-
-    
+        if "Category" not in df.columns or "Value" not in df.columns:
+            raise ValueError("The Excel file must contain 'Category' and 'Value' columns.")
+        
         # Aggregate data by Category and sum the Value column
         aggregated_data = (
             df.groupby("Category")["Value"]
@@ -18,10 +18,10 @@ def process_file(file_path):
             .rename(columns={"Value": "value"})
             .to_dict(orient="records")
         )
-
+        
         # Calculate total sales
         total_sales = df["Value"].sum()
-
+        
         # Convert all int64/float64 values to native Python types
         def convert_to_native_types(data):
             if isinstance(data, list):
@@ -32,26 +32,23 @@ def process_file(file_path):
                 return data.item()
             else:
                 return data
-
+        
         # Prepare the result
         result = {
             "total_sales": total_sales,
             "aggregated_data": [{"name": row["Category"], "value": row["value"]} for row in aggregated_data],
         }
-
+        
         # Convert to native Python types
         result = convert_to_native_types(result)
-
+        
         # Return the result as JSON
         return json.dumps(result)
-
+    
     except Exception as e:
         return json.dumps({"error": str(e)})
 
+# Entry point for the script
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(json.dumps({"error": "Usage: script.py <file_path>"}))
-        sys.exit(1)
-
-    file_path = sys.argv[1]
-    print(process_file(file_path))
+    # In Pyodide, this block will not execute
+    print(json.dumps({"error": "This script is intended to run in Pyodide."}))
