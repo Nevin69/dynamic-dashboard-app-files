@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { ipcRenderer } from "electron";
 import {
   BarChart,
   Bar,
@@ -17,6 +16,7 @@ function App() {
   const [data, setData] = useState([]);
   const [totalSales, setTotalSales] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null); // Track errors
   const [uiReady, setUiReady] = useState(false); // Ensure UI loads first
 
   useEffect(() => {
@@ -30,34 +30,43 @@ function App() {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".xlsx,.xls,.csv";
-
     input.onchange = async (event) => {
       const file = event.target.files[0];
-      if (file) {
-        console.log("📂 Selected file:", file);
-        setLoading(true);
-
+      if (!file) return;
+  
+      console.log("📂 Selected file:", file);
+      setLoading(true);
+      setError(null);
+  
+      try {
         const reader = new FileReader();
         reader.onload = async (e) => {
           const fileContent = e.target.result;
-          ipcRenderer.send("process-file", {
+  
+          // Send file to main process for processing
+          window.electronAPI.processFile({
             name: file.name,
-            content: new Uint8Array(fileContent),
+            content: Array.from(new Uint8Array(fileContent)), // Convert to array
           });
-
-          ipcRenderer.once("processed-data", (event, processedData) => {
+  
+          // Listen for processed data
+          window.electronAPI.onProcessedData((processedData) => {
             setLoading(false);
-
             if (processedData.error) {
+              setError(processedData.error);
               console.error("❌ Error from Python:", processedData.error);
               return;
             }
-
+  
             setTotalSales(processedData.total_sales || 0);
             setData(processedData.aggregated_data || []);
           });
         };
         reader.readAsArrayBuffer(file);
+      } catch (err) {
+        setLoading(false);
+        setError("An error occurred while reading the file.");
+        console.error("🚨 File read error:", err);
       }
     };
     input.click();
@@ -96,8 +105,21 @@ function App() {
             </div>
           )}
 
+          {/* Display Error Message */}
+          {error && (
+            <div
+              style={{
+                marginTop: "20px",
+                fontSize: "18px",
+                color: "red",
+              }}
+            >
+              ❌ Error: {error}
+            </div>
+          )}
+
           {/* Display Total Sales as a KPI */}
-          {totalSales !== null && !loading && (
+          {totalSales !== null && !loading && !error && (
             <div
               style={{
                 margin: "20px auto",
@@ -117,7 +139,7 @@ function App() {
           )}
 
           {/* Show Charts Only When Data is Available */}
-          {data.length > 0 && !loading && (
+          {data.length > 0 && !loading && !error && (
             <>
               <h2>Bar Chart</h2>
               <BarChart
@@ -133,7 +155,6 @@ function App() {
                 <Legend />
                 <Bar dataKey="value" fill="#8884d8" />
               </BarChart>
-
               <h2>Pie Chart</h2>
               <PieChart width={400} height={400}>
                 <Pie
