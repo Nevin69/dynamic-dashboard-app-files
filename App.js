@@ -11,12 +11,17 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import FileUpload from "./FileUpload"; // Import the reusable component
+import FileUpload from "./FileUpload";
 
 function App() {
   const [data, setData] = useState([]);
   const [totalSales, setTotalSales] = useState(null);
   const [uiReady, setUiReady] = useState(false);
+  const [lastUploadedFiles] = useState(() => {
+    // ✅ Load last uploaded files from localStorage
+    const savedFiles = localStorage.getItem("uploadedFiles");
+    return savedFiles ? JSON.parse(savedFiles) : [];
+  });
 
   useEffect(() => {
     setTimeout(() => {
@@ -28,6 +33,18 @@ function App() {
     setTotalSales(processedData.totalSales);
     setData(processedData.data);
   };
+
+  // ✅ Fetch new data every 30 seconds WITHOUT reprocessing files
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (lastUploadedFiles.every((file) => file)) {
+        console.log("🔄 Refreshing Data (No Reprocessing)...");
+        window.electronAPI.processFiles([...lastUploadedFiles]); // Only sends file paths, no need to re-upload
+      }
+    }, 10000); // ⏳ Refresh every 30 seconds
+
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, [lastUploadedFiles]);
 
   const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#AF19FF"];
 
@@ -41,7 +58,7 @@ function App() {
         <>
           <h1>Data Aggregation and Visualization</h1>
 
-          {/* Dynamic Upload Component - Change numFiles per client */}
+          {/* Dynamic Upload Component */}
           <FileUpload 
             numFiles={2} 
             buttonLabels={["Upload Data 1", "Upload Data 2"]} 
@@ -51,9 +68,6 @@ function App() {
             ]}
             onDataProcessed={handleDataProcessed} 
           />
-
-
-
 
           {/* Total Sales KPI */}
           {totalSales !== null && (
