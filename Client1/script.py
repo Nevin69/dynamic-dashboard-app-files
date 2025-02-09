@@ -2,56 +2,48 @@ import pandas as pd
 import json
 import sys
 
-def process_file(file_path):
+def process_files(file_path1, file_path2):
     try:
-        # Read the Excel file
-        df = pd.read_excel(file_path)
+        # Read both Excel files
+        df1 = pd.read_excel(file_path1)
+        df2 = pd.read_excel(file_path2)
 
         # Validate required columns
+        if "Value" not in df1.columns:
+            return json.dumps({"error": "Both files must contain a 'Value' column."})
 
-    
-        # Aggregate data by Category and sum the Value column
+        if "Category" not in df1.columns:
+            return json.dumps({"error": "File 1 must contain a 'Category' column."})
+
+        # Calculate total sales from both files
+        total_sales = df1["Value"].sum() + df2["Value"].sum()
+
+        # Aggregate data only from file 1
         aggregated_data = (
-            df.groupby("Category")["Value"]
+            df1.groupby("Category")["Value"]
             .sum()
             .reset_index()
             .rename(columns={"Value": "value"})
             .to_dict(orient="records")
         )
 
-        # Calculate total sales
-        total_sales = df["Value"].sum()
-
-        # Convert all int64/float64 values to native Python types
-        def convert_to_native_types(data):
-            if isinstance(data, list):
-                return [convert_to_native_types(item) for item in data]
-            elif isinstance(data, dict):
-                return {k: convert_to_native_types(v) for k, v in data.items()}
-            elif hasattr(data, 'item'):  # For NumPy types like int64, float64
-                return data.item()
-            else:
-                return data
-
-        # Prepare the result
+        # Convert to JSON-friendly format
         result = {
-            "total_sales": total_sales,
-            "aggregated_data": [{"name": row["Category"], "value": row["value"]} for row in aggregated_data],
+            "total_sales": float(total_sales),  # Convert to float for JSON
+            "aggregated_data": [{"name": row["Category"], "value": float(row["value"])} for row in aggregated_data]
         }
 
-        # Convert to native Python types
-        result = convert_to_native_types(result)
-
-        # Return the result as JSON
         return json.dumps(result)
 
     except Exception as e:
         return json.dumps({"error": str(e)})
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(json.dumps({"error": "Usage: script.py <file_path>"}))
+    if len(sys.argv) != 3:  # Expecting exactly 2 files
+        print(json.dumps({"error": "Usage: script.py <file_path1> <file_path2>"}))
         sys.exit(1)
 
-    file_path = sys.argv[1]
-    print(process_file(file_path))
+    file_path1, file_path2= sys.argv[1], sys.argv[2]
+
+
+    print(process_files(file_path1, file_path2))
