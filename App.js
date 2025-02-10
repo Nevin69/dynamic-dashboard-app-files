@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   BarChart,
   Bar,
@@ -17,8 +17,7 @@ function App() {
   const [data, setData] = useState([]);
   const [totalSales, setTotalSales] = useState(null);
   const [uiReady, setUiReady] = useState(false);
-  const [lastUploadedFiles] = useState(() => {
-    // ✅ Load last uploaded files from localStorage
+  const [lastUploadedFiles, setLastUploadedFiles] = useState(() => {
     const savedFiles = localStorage.getItem("uploadedFiles");
     return savedFiles ? JSON.parse(savedFiles) : [];
   });
@@ -34,19 +33,33 @@ function App() {
     setData(processedData.data);
   };
 
-  // ✅ Fetch new data every 30 seconds WITHOUT reprocessing files
+  const updateFiles = useCallback((files) => {
+    setLastUploadedFiles(files);
+    localStorage.setItem("uploadedFiles", JSON.stringify(files));
+  
+    // ✅ If all files are cleared, reset UI & stop auto-refresh
+    if (files.every((file) => file === null)) {
+      console.log("🧹 Files cleared! Resetting data...");
+      setTotalSales(null);
+      setData([]);
+    }
+  }, []);
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (lastUploadedFiles.every((file) => file)) {
-        console.log("🔄 Refreshing Data (No Reprocessing)...");
-        window.electronAPI.processFiles([...lastUploadedFiles]); // Only sends file paths, no need to re-upload
-      }
-    }, 10000); // ⏳ Refresh every 30 seconds
+    if (lastUploadedFiles.every((file) => file)) {
+      console.log("🔄 Refreshing Data (No Reprocessing)...");
 
-    return () => clearInterval(interval); // Cleanup on unmount
+      const refreshData = () => {
+        console.log("Fetching updated data...");
+        window.electronAPI.processFiles([...lastUploadedFiles]);
+      };
+
+      refreshData();
+      const interval = setInterval(refreshData, 30000);
+
+      return () => clearInterval(interval);
+    }
   }, [lastUploadedFiles]);
-
-  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#AF19FF"];
 
   return (
     <div style={{ textAlign: "center", marginTop: "50px" }}>
@@ -58,36 +71,24 @@ function App() {
         <>
           <h1>Data Aggregation and Visualization</h1>
 
-          {/* Dynamic Upload Component */}
           <FileUpload 
             numFiles={2} 
             buttonLabels={["Upload Data 1", "Upload Data 2"]} 
             buttonStyles={[
-              { backgroundColor: "#4CAF50", color: "white" }, 
-              { backgroundColor: "#4CAF50", color: "white" }, 
+              { backgroundColor: "#3d3a4e", color: "white" }, 
+              { backgroundColor: "#3d3a4e", color: "white" }, 
             ]}
-            onDataProcessed={handleDataProcessed} 
+            onDataProcessed={handleDataProcessed}
+            onFilesUpdated={updateFiles} // ✅ Pass callback to FileUpload.js
           />
 
-          {/* Total Sales KPI */}
           {totalSales !== null && (
-            <div
-              style={{
-                margin: "20px auto",
-                padding: "15px",
-                backgroundColor: "#f0f8ff",
-                border: "2px solid #007bff",
-                borderRadius: "10px",
-                width: "300px",
-                display: "inline-block",
-              }}
-            >
+            <div style={{ margin: "20px auto", padding: "15px", backgroundColor: "#f0f8ff", border: "2px solid #007bff", borderRadius: "10px", width: "300px", display: "inline-block" }}>
               <h2>Total Sales</h2>
               <p style={{ fontSize: "24px", fontWeight: "bold" }}>${totalSales.toLocaleString()}</p>
             </div>
           )}
 
-          {/* Charts */}
           {data.length > 0 && (
             <>
               <h2>Bar Chart</h2>
@@ -113,7 +114,7 @@ function App() {
                   dataKey="value"
                 >
                   {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#AF19FF"][index % 5]} />
                   ))}
                 </Pie>
                 <Tooltip />
